@@ -1,23 +1,24 @@
 
-classdef (ConstructOnLoad) matlabvle_interface < dynamicprops
+classdef (ConstructOnLoad) matlabvle < dynamicprops
     properties (SetAccess = private, Hidden = true)
         % Handle to the underlying C++ class instance
         objectHandle;
         % Template of anonymous function handle
-        method_code='@(varargin) matlabvle_interface.call(uint64(object_handle),''name'',varargin{:})';
+        method_code='@(varargin) matlabvle.call(uint64(object_handle),''name'',varargin{:})';
         % C++ methods names to be added dynamically as properties
         % containing a handle to a dedicated anonymous function
         methods_names={'getFileName' 'setFileName' 'getPackageName' 'setPackageName'...
-            'openFile' 'getStatus' 'getHomeDir' ...
+            'openFile' 'save' 'getStatus' 'getHomeDir' ...
             'getExperimentName' 'getBegin' 'setBegin' 'getDuration' 'setDuration' ...
             'setOutputPlugin' 'getConditionsSize' 'listConditions' 'getConditionPortsSize'...
             'listConditionPorts' 'clearConditionPort' 'getConditionPortValuesSize'...
             'getConditionPortValues' 'getConditionPortValue' 'getConditionValueType' ...
-            'addRealCondition' 'addIntegerCondition' 'addStringCondition' ...
-            'getViewOutput' 'getDynamicsSize' 'listDynamics'...
-            'getDynamicModelsSize' 'listDynamicModels'...
-            ...
-            'run'};
+            'addRealCondition' 'addIntegerCondition' 'addStringCondition' 'addBooleanCondition'...
+            'getViewOutput' 'getViewsSize' 'listViews' 'existView' ...
+            'getDynamicsSize' 'listDynamics' 'getDynamicModelsSize' 'listDynamicModels' 'setConditionValue' ...
+            'existObservable' 'listObservables' 'getObservablesSize' 'clearObservables' ...
+            'addObservable' 'delObservable' ...
+            'listObservablePorts' 'getObservablePortsSize' 'run'};
     end
     
     methods (Static)
@@ -25,10 +26,11 @@ classdef (ConstructOnLoad) matlabvle_interface < dynamicprops
         function varargout=call(handle_id,name,varargin)
             [varargout{1:nargout}] = matlabvle_interface_mex(name, handle_id, varargin{:});
         end
+        
     end
     
     methods     
-        function this = matlabvle_interface(varargin)
+        function this = matlabvle(varargin)
             % Constructor - Create a new C++ Vle class instance
             % Handle to C++ instance
             this.objectHandle = matlabvle_interface_mex('new', varargin{:});
@@ -49,21 +51,25 @@ classdef (ConstructOnLoad) matlabvle_interface < dynamicprops
             % Destructor - Destroy the C++ Vle class instance
             matlabvle_interface_mex('delete', this.objectHandle);
         end
+        
+        function obj_handle=getHandle(this)
+            obj_handle=this.objectHandle;
+        end
          
         %%
         function addDynProp(this,prop_name,prop_value)
             % Adding a dynamic property and set its value
-            % to a matlabvle_interface instance.
+            % to a matlabvle instance.
             % prop_name: property name
             % prop_value : property value
             if ~isprop(this,prop_name)
                 new_prop = addprop(this,prop_name);
                 new_prop.Transient=true;
-                % access restriicted to class members
+                % access restricted to class members
                 new_prop.SetAccess='private';
                 this.(prop_name)=prop_value;
             else
-                fprintf('\n %s : this is an already defined property !',prop_name);
+                fprintf('\n %s : this is an already defined dynamic property !',prop_name);
             end
         end
         
@@ -85,7 +91,7 @@ classdef (ConstructOnLoad) matlabvle_interface < dynamicprops
         function methods_list = getMethodsNames(this)
             % Getting declared method names list
             % from methods_name property
-            methods_list = this.methods_name;
+            methods_list = this.methods_names;
         end
         
         function method_exists = existMethodName(this,method_name)
@@ -94,6 +100,21 @@ classdef (ConstructOnLoad) matlabvle_interface < dynamicprops
             % method_exists : true if exists, false instead
            method_exists=ismember(method_name,this.methods_names);
         end
+        
+        function help(this,method_name)
+           %this.getMethodHelp(method_name);
+           this.addDynProp('methodHelp',[method_name ' help content']);
+           disp(this.methodHelp);
+        end
+        
+        function set_methodHelp(this,val)
+            if  ~(ischar(val))
+                error('methodHelp requires a char input ')
+            end
+            this.methodHelp = val; % set property value
+        end
+
+
         
     end
 end
