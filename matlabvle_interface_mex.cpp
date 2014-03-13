@@ -1,8 +1,5 @@
 
 #include <cassert>
-/*#include <vle/utils/Package.hpp>
- * #include <vle/utils/Path.hpp>
- * #include <vle/utils/Module.hpp>*/
 #include <vle/utils.hpp>
 #include <vle/manager/Run.hpp>
 #include <vle/manager/Manager.hpp>
@@ -195,7 +192,7 @@ public:
     // setOutputPlugin with location arg.
     void setOutputPlugin(char* out_view,char* out_location,char* out_destination, char* out_type)
     {
-		mexPrintf("In setOutputPlugin...");
+		// mexPrintf("In setOutputPlugin...");
         assert(out_view);
         assert(out_location);
         assert(out_destination);
@@ -209,14 +206,17 @@ public:
             std::cout << "setting local stream " << out.streamformat() << std::endl;
         } else{
             out.setDistantStream(out_location, out_type);
+            std::cout << "setting distant stream " << out.streamformat() << std::endl;
         }
         
+        // 
         // To see what is package for output
-        mexPrintf("stream format: %s",out.streamformat());
-        mexPrintf("output package: %s",out.package());
-        mexPrintf("output plugin: %s",out.plugin());
-        mexPrintf("output location: %s" << out.location());
-        mexPrintf("output name: %s",out.name());
+        //
+        /*std::cout << "stream format: " << out.streamformat() << std::endl;
+        std::cout << "output package:  " << out.package() << std::endl;
+        std::cout << "output plugin:  " << out.plugin() << std::endl;
+        std::cout << "output location:  " << out.location() << std::endl;
+        std::cout << "output name:  " << out.name() << std::endl;*/
     }
     
     // setOutputPlugin without location arg.
@@ -624,7 +624,7 @@ public:
         
     }
     
-    // TODO: listObservablePorts(obs_name)
+    // listObservablePorts(obs_name)
     void listObservablesPorts(mxArray* ret,char *obsname)
     {
         std::string obs_name(obsname);
@@ -639,10 +639,56 @@ public:
         }
     }
     
-    // TODO: addObservablePort(obs_name,port_name)
+    // addObservablePort(obs_name,port_name)
+    void addObservablePort(char *obsname,char *portname)
+    {
+		std::string obs_name(obsname);
+        std::string port_name(portname);
+        
+		if (getVpz()->project().experiment().views().observables().exist(obs_name)){
+			vpz::Observable& obs(getVpz()->project().experiment().views().observables().get(obs_name));
+			if (!obs.exist(port_name)){
+				obs.add(port_name);
+			}
+		}
+    }
     
-    // TODO: delObservablePort(obs_name,port_name)
+    // delObservablePort(obs_name,port_name)
+    void delObservablePort(char *obsname,char *portname)
+    {
+        std::string obs_name(obsname);
+        std::string port_name(portname);
+        
+        if (getVpz()->project().experiment().views().observables().exist(obs_name)){
+			vpz::Observable& obs(getVpz()->project().experiment().views().observables().get(obs_name));
+			if (obs.exist(port_name)){
+				obs.del(port_name);
+			}
+		}
+    }
     
+    
+    // NEW METHODS **************************************
+    // TODO: addViewToObservablePort(obs_name,port_name,view_name)
+    
+    // TODO: delViewFromObservablePort(obs_name,port_name,view_name)
+    
+    // existObservablePortView(obs_name,port_name,view_name)
+    void existObservablePortView(double *exist_obs,char *obsname,char *portname,char *viewname){
+		std::string obs_name(obsname);
+        std::string port_name(portname);
+        std::string view_name(viewname);
+		vpz::ObservablePort& obsport(getVpz()->project().experiment().views().observables().get(obs_name).get(port_name));
+		if ((getVpz()->project().experiment().views().exist(view_name)) && (obsport.exist(view_name))) {
+			*exist_obs=1;
+		} else {
+			*exist_obs=0;
+		}
+	
+	}
+    
+    
+    // getDynamicsSize
     void getDynamicsSize(double *size_val)
     {
         vpz::DynamicList& lst(getVpz()->project().dynamics().dynamiclist());
@@ -822,6 +868,25 @@ private:
 
 
 
+
+void checkInputArgs(char *func_name,int in_args_nb,int in_needed_nb)
+{
+	// checking input argument number passed through the mex function/function name
+	// Throwing an exception if not enough numerous.
+	// No error message Id is given in exception message
+	std::string msg(func_name);
+	std::ostringstream nargs;
+	nargs << in_needed_nb-2; // effective number given by user, in_needed_nb==total for mex function
+	msg.append(" : missing arguments, ");
+	msg.append(nargs.str());
+	msg.append(" needed!");
+
+	if (in_args_nb < in_needed_nb)
+            //mexErrMsgTxt(msg.c_str());
+            mexErrMsgIdAndTxt("MATLABVLE:narginchk:notEnoughInputs",msg.c_str());
+}
+
+
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
     // Get the command string
@@ -856,7 +921,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     if (nrhs < 2)
         mexErrMsgTxt("Second input should be a class instance handle.");
     
-    // Delete
+    // Delete object
     if (!strcmp("delete", cmd)) {
         // Destroy the C++ object
         destroyObject<Vle>(prhs[1]);
@@ -870,18 +935,24 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     Vle *vle_instance = convertMat2Ptr<Vle>(prhs[1]);
     
     
+    ///////////////////////////////////////////////////////////
     // Call the various class methods
+    ///////////////////////////////////////////////////////////
+    
+    
     // setFileName
     if (!strcmp("setFileName", cmd)) {
+		checkInputArgs(cmd,nrhs,3);
         // Check parameters
-        if (nrhs < 2)
-            mexErrMsgTxt("setFilename: missing arguments.");
+        /*if (nrhs < 3)
+            mexErrMsgTxt("setFilename: missing arguments.");*/
         // Call the method
         char *in_name=mxArrayToString(prhs[2]);
         
         vle_instance->setFileName(in_name);
         return;
     }
+    
     
     // getFileName   :
     if (!strcmp("getFileName", cmd)) {
@@ -893,17 +964,20 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         return;
     }
     
+    
     // setPackageName
     if (!strcmp("setPackageName", cmd)) {
+		checkInputArgs(cmd,nrhs,3);
         // Check parameters
-        if (nrhs < 2)
-            mexErrMsgTxt("Test: missing arguments.");
+        /*if (nrhs < 3)
+            mexErrMsgTxt("Test: missing arguments.");*/
         // Call the method
         
         char* in_name=mxArrayToString(prhs[2]);
         vle_instance->setPackageName(in_name);
         return;
     }
+    
     
     // getPackageName   :
     if (!strcmp("getPackageName", cmd)) {
@@ -915,6 +989,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         return;
     }
     
+    
     // openFile
     if (!strcmp("openFile", cmd)) {
         // Call the method
@@ -922,25 +997,29 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         return;
     }
     
+    
     // save
     if (!strcmp("save", cmd)) {
+		checkInputArgs(cmd,nrhs,3);
+		
 		char* file_name=mxArrayToString(prhs[2]);
         // Call the method
         vle_instance->save(file_name);
         return;
     }
     
+    
     // getInitStatus   :
     if (!strcmp("getInitStatus", cmd)) {
-        // Check parameters
-        if (nlhs < 0 || nrhs < 2)
-            mexErrMsgTxt("Test: Unexpected arguments.");
+		checkInputArgs(cmd,nrhs,2);
+        
         // Call the method
         bool *out_status;
         vle_instance->getInitStatus(out_status);
         plhs[0]=mxCreateLogicalScalar(*out_status);
         return;
     }
+    
     
     // getHomeDir   :
     if (!strcmp("getHomeDir", cmd)) {
@@ -971,6 +1050,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     // getBegin
     if (!strcmp("getBegin", cmd)) {
         // Check parameters
+        
         plhs[0]=mxCreateDoubleMatrix((mwSize)1, (mwSize)1, mxREAL);
         double *out_begin=mxGetPr(plhs[0]);
         vle_instance->getBegin(out_begin);
@@ -980,9 +1060,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     
     // setBegin
     if (!strcmp("setBegin", cmd)) {
-        // Check parameters
-        if (nrhs < 3)
-            mexErrMsgTxt("Test: missing arguments.");
+		checkInputArgs(cmd,nrhs,3);
         
         double in_begin=mxGetScalar(prhs[2]);
         vle_instance->setBegin(in_begin);
@@ -1002,9 +1080,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     
     // setDuration
     if (!strcmp("setDuration", cmd)) {
-        // Check parameters
-        if (nrhs < 3)
-            mexErrMsgTxt("Test: missing arguments.");
+		checkInputArgs(cmd,nrhs,3);
+        
         
         double in_duration=mxGetScalar(prhs[2]);
         vle_instance->setDuration(in_duration);
@@ -1014,9 +1091,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     
     // setOutputPlugin   :
     if (!strcmp("setOutputPlugin", cmd)) {
-        // Check parameters
-        if (nrhs < 6)
-            mexErrMsgTxt("Test: missing arguments.");
+		checkInputArgs(cmd,nrhs,6);
         
         char* out_view=mxArrayToString(prhs[2]);
         char* out_location=mxArrayToString(prhs[3]);
@@ -1026,9 +1101,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         return;
     }
     
+    
     // getConditionsSize
     if (!strcmp("getConditionsSize", cmd)) {
         // Check parameters
+        
         plhs[0]=mxCreateDoubleMatrix((mwSize)1, (mwSize)1, mxREAL);
         double *out_size=mxGetPr(plhs[0]);
         vle_instance->getConditionsSize(out_size);
@@ -1051,8 +1128,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     
     // getConditionPortsSize
     if (!strcmp("getConditionPortsSize", cmd)) {
-        if (nrhs < 3)
-            mexErrMsgTxt("Test: missing arguments.");
+        checkInputArgs(cmd,nrhs,3);
         
         char *cond_name=mxArrayToString(prhs[2]);
         plhs[0]=mxCreateDoubleMatrix((mwSize)1, (mwSize)1, mxREAL);
@@ -1061,10 +1137,10 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         return;
     }
     
+    
     // listConditionPorts(cond_name)
     if (!strcmp("listConditionPorts", cmd)) {
-        if (nrhs < 3)
-            mexErrMsgTxt("Test: missing arguments.");
+		checkInputArgs(cmd,nrhs,3);
         
         char *cond_name=mxArrayToString(prhs[2]);
         double *out_size=mxGetPr(mxCreateDoubleMatrix((mwSize)1, (mwSize)1, mxREAL));
@@ -1075,11 +1151,10 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         return;
     }
     
-    // clearConditionPort(condition_name,port_name)
     
+    // clearConditionPort(condition_name,port_name)
     if (!strcmp("clearConditionPort", cmd)) {
-        if (nrhs < 4)
-            mexErrMsgTxt("Test: missing arguments.");
+        checkInputArgs(cmd,nrhs,4);
         
         char *cond_name=mxArrayToString(prhs[2]);
         char *port_name=mxArrayToString(prhs[3]);
@@ -1090,10 +1165,10 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         return;
     }
     
+    
     // getConditionPortValuesSize(cond_name,p_name)
     if (!strcmp("getConditionPortValuesSize", cmd)) {
-        if (nrhs < 4)
-            mexErrMsgTxt("Test: missing arguments.");
+		checkInputArgs(cmd,nrhs,4);
         
         char *cond_name=mxArrayToString(prhs[2]);
         char *port_name=mxArrayToString(prhs[3]);
@@ -1105,10 +1180,10 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         return;
     }
     
+    
     // getConditionPortValues(cond_name,p_name)
     if (!strcmp("getConditionPortValues", cmd)) {
-        if (nrhs < 4)
-            mexErrMsgTxt("Test: missing arguments.");
+        checkInputArgs(cmd,nrhs,4);
         
         char *cond_name=mxArrayToString(prhs[2]);
         char *port_name=mxArrayToString(prhs[3]);
@@ -1124,10 +1199,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         return;
     }
     
+    
     // getConditionPortValue(cond_name,p_name,idx)
     if (!strcmp("getConditionPortValue", cmd)) {
-        if (nrhs < 5)
-            mexErrMsgTxt("Test: missing arguments.");
+		checkInputArgs(cmd,nrhs,5);
+        
         char value_type[30];
         char *cond_name=mxArrayToString(prhs[2]);
         char *port_name=mxArrayToString(prhs[3]);
@@ -1176,8 +1252,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     
     // getConditionValueType(cond_name,port_name,position_value)
     if (!strcmp("getConditionValueType", cmd)) {
-        if (nrhs < 4)
-            mexErrMsgTxt("Test: missing arguments.");
+		checkInputArgs(cmd,nrhs,5);
         
         char value_type[30];
         char *cond_name=mxArrayToString(prhs[2]);
@@ -1188,10 +1263,10 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         return;
     }
     
+    
     // addRealCondition(condition_name,port_name,value_content)
     if (!strcmp("addRealCondition", cmd)) {
-        if (nrhs < 5)
-            mexErrMsgTxt("Test: missing arguments.");
+		checkInputArgs(cmd,nrhs,5);
         
         char *cond_name=mxArrayToString(prhs[2]);
         char *port_name=mxArrayToString(prhs[3]);
@@ -1201,10 +1276,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         vle_instance->addRealCondition(status,cond_name,port_name,value);
         return;
     }
+    
+    
     // addIntegerCondition(condition_name,port_name,value_content)
     if (!strcmp("addIntegerCondition", cmd)) {
-        if (nrhs < 5)
-            mexErrMsgTxt("Test: missing arguments.");
+        checkInputArgs(cmd,nrhs,5);
         
         char *cond_name=mxArrayToString(prhs[2]);
         char *port_name=mxArrayToString(prhs[3]);
@@ -1215,10 +1291,10 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         return;
     }
     
+    
     // addBooleanCondition(condition_name,port_name,value_content)
     if (!strcmp("addBooleanCondition", cmd)) {
-        if (nrhs < 5)
-            mexErrMsgTxt("Test: missing arguments.");
+		checkInputArgs(cmd,nrhs,5);
         
         char *cond_name=mxArrayToString(prhs[2]);
         char *port_name=mxArrayToString(prhs[3]);
@@ -1229,10 +1305,10 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         return;
     }
     
+    
     // addStringCondition(condition_name,port_name,value_content)
     if (!strcmp("addStringCondition", cmd)) {
-        if (nrhs < 5)
-            mexErrMsgTxt("Test: missing arguments.");
+        checkInputArgs(cmd,nrhs,5);
         
         char *cond_name=mxArrayToString(prhs[2]);
         char *port_name=mxArrayToString(prhs[3]);
@@ -1243,10 +1319,10 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         return;
     }
     
+    
     // setConditionValue(condition_name,port_name,value,value_type,value_position)
     if (!strcmp("setConditionValue", cmd)) {
-        if (nrhs < 7)
-            mexErrMsgTxt("Test: missing arguments.");
+        checkInputArgs(cmd,nrhs,7);
         
         char *cond_name=mxArrayToString(prhs[2]);
         char *port_name=mxArrayToString(prhs[3]);
@@ -1262,15 +1338,17 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     
     // getViewOutput
     if (!strcmp("getViewOutput", cmd)) {
-        //
-        if (nlhs < 0 || nrhs < 3)
-            mexErrMsgTxt("Test: missing arguments.");
+		checkInputArgs(cmd,nrhs,3);
+        // see for output checking !
+        /*if (nlhs < 0 || nrhs < 3)
+            mexErrMsgTxt("Test: missing arguments.");*/
         //
         char *view_name=mxArrayToString(prhs[2]);
         vle_instance->getViewOutput(view_name);
         plhs[0] = mxCreateString(view_name);
         return;
     }
+    
     
     // listViews
     if (!strcmp("listViews", cmd)) {
@@ -1282,7 +1360,6 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
     
     
-    
     // getViewsSize
     if (!strcmp("getViewsSize", cmd)) {
         plhs[0]=mxCreateDoubleMatrix((mwSize)1, (mwSize)1, mxREAL);
@@ -1291,10 +1368,10 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         return;
     }
     
+    
     // existView(view_exist,view_name)
     if (!strcmp("existView", cmd)) {
-        if (nrhs < 3)
-            mexErrMsgTxt("Test: missing arguments.");
+		checkInputArgs(cmd,nrhs,3);
         
         char *view_name=mxArrayToString(prhs[2]);
         
@@ -1304,10 +1381,10 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         return;
     }
     
+    
     // existObservable(obs_exist,obs_name)
     if (!strcmp("existObservable", cmd)) {
-        if (nrhs < 3)
-            mexErrMsgTxt("Test: missing arguments.");
+		checkInputArgs(cmd,nrhs,3);
         
         char *obs_name=mxArrayToString(prhs[2]);
         
@@ -1329,6 +1406,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         return;
     }
     
+    
     // getObservablesSize()
     if (!strcmp("getObservablesSize", cmd)) {
         plhs[0]=mxCreateDoubleMatrix((mwSize)1, (mwSize)1, mxREAL);
@@ -1337,16 +1415,18 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         return;
     }
     
+    
     // clearObservables()
     if (!strcmp("clearObservables", cmd)) {
         vle_instance->clearObservables();
         return;
     }
     
+    
     // addObservable(obs_name)
     if (!strcmp("addObservable", cmd)) {
-        if (nrhs < 3)
-            mexErrMsgTxt("Test: missing arguments.");
+        checkInputArgs(cmd,nrhs,3);
+        
         char *obs_name=mxArrayToString(prhs[2]);
         plhs[0]=mxCreateDoubleMatrix((mwSize)1, (mwSize)1, mxREAL);
         double *status=mxGetPr(plhs[0]);
@@ -1354,19 +1434,20 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         return;
     }
     
+    
     // delObservable(obs_name)
     if (!strcmp("delObservable", cmd)) {
-        if (nrhs < 3)
-            mexErrMsgTxt("Test: missing arguments.");
+        checkInputArgs(cmd,nrhs,3);
+        
         char *obs_name=mxArrayToString(prhs[2]);
         vle_instance->delObservable(obs_name);
         return;
     }
     
+    
     // getObservablePortsSize(obs_name)
     if (!strcmp("getObservablePortsSize", cmd)) {
-        if (nrhs < 3)
-            mexErrMsgTxt("Test: missing arguments.");
+        checkInputArgs(cmd,nrhs,3);
         
         char *obs_name=mxArrayToString(prhs[2]);
         plhs[0]=mxCreateDoubleMatrix((mwSize)1, (mwSize)1, mxREAL);
@@ -1375,10 +1456,10 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         return;
     }
     
+    
     // listObservablePorts(obs_name)
     if (!strcmp("listObservablePorts", cmd)) {
-        if (nrhs < 3)
-            mexErrMsgTxt("Test: missing arguments.");
+        checkInputArgs(cmd,nrhs,3);
         
         char *obs_name=mxArrayToString(prhs[2]);
         double *out_size=mxGetPr(mxCreateDoubleMatrix((mwSize)1, (mwSize)1, mxREAL));
@@ -1388,9 +1469,53 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         return;
     }
     
-    // TODO: addObservablePort(obs_name,port_name)
     
-    // TODO: delObservablePort(obs_name,port_name)
+    // addObservablePort(obs_name,port_name)
+	if (!strcmp("addObservablePort", cmd)) {
+        checkInputArgs(cmd,nrhs,4);
+        
+        char *obs_name=mxArrayToString(prhs[2]);
+        char *port_name=mxArrayToString(prhs[3]);
+        //plhs[0]=mxCreateDoubleMatrix((mwSize)1, (mwSize)1, mxREAL);
+        //double *status=mxGetPr(plhs[0]);
+        vle_instance->addObservablePort(obs_name,port_name);
+        return;
+    }
+    
+    
+    // delObservablePort(obs_name,port_name)
+    if (!strcmp("delObservablePort", cmd)) {
+        checkInputArgs(cmd,nrhs,3);
+        
+        char *obs_name=mxArrayToString(prhs[2]);
+        char *port_name=mxArrayToString(prhs[3]);
+        //plhs[0]=mxCreateDoubleMatrix((mwSize)1, (mwSize)1, mxREAL);
+        //double *status=mxGetPr(plhs[0]);
+        vle_instance->delObservablePort(obs_name,port_name);
+        return;
+    }
+    
+    // NEW METHODS **************************************
+    
+    // TODO: addViewToObservablePort(obs_name,port_name,view_name)
+    // SEE addViewToObservablePorts : for multiple ports (cell: mxIsClass)
+    
+    // TODO: delViewFromObservablePort(obs_name,port_name,view_name)
+    // SEE delViewFromObservablePorts : for multiple ports (cell: mxIsClass)
+    
+    // TODO: existObservablePortView(obs_name,port_name,view_name)
+    if (!strcmp("existObservablePortView", cmd)) {
+		checkInputArgs(cmd,nrhs,5);
+        
+        char *obs_name=mxArrayToString(prhs[2]);
+        char *port_name=mxArrayToString(prhs[3]);
+        char *view_name=mxArrayToString(prhs[4]);
+        
+        plhs[0]=mxCreateDoubleMatrix((mwSize)1, (mwSize)1, mxREAL);
+        double *status=mxGetPr(plhs[0]);
+        vle_instance->existObservablePortView(status,obs_name,port_name,view_name);
+        return;
+    }
     
     
     // getDynamicsSize
@@ -1416,11 +1541,10 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         return;
     }
     
-    //
+    
     // getDynamicModelsSize
     if (!strcmp("getDynamicModelsSize", cmd)) {
-        if (nrhs < 3)
-            mexErrMsgTxt("Test: missing arguments.");
+        checkInputArgs(cmd,nrhs,3);
         
         char *dyn_name=mxArrayToString(prhs[2]);
         plhs[0]=mxCreateDoubleMatrix((mwSize)1, (mwSize)1, mxREAL);
@@ -1431,8 +1555,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     
     // listDynamicModels(dynamic_name)
     if (!strcmp("listDynamicModels", cmd)) {
-        if (nrhs < 3)
-            mexErrMsgTxt("Test: missing arguments.");
+        checkInputArgs(cmd,nrhs,3);
         
         char *dyn_name=mxArrayToString(prhs[2]);
         //
@@ -1445,16 +1568,15 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
     
     
-    // NEW METHODS **************************************
-    // TODO: addObserbablePortsToView(obj,obs_name,view_name,vc_port_names)
     
-    // TODO: removeObservablePortsFromView(obj,obs_name,view_name,vc_port_names)
     
     
     
     // run   :  simple run
     if (!strcmp("run", cmd)) {
         // Check parameters
+        checkInputArgs(cmd,nrhs,2);
+        
         switch (nrhs){
             case 2:
                 // ajout verif plugin : file !!!!
@@ -1479,7 +1601,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     
     
     // Got here, so command not recognized
-    mexErrMsgTxt("Command not recognized.");
+    mexErrMsgTxt("Unknown command !");
 }
 
 
