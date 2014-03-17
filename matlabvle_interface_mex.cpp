@@ -227,7 +227,30 @@ public:
     }*/
     
     
+    void addCondition(char *cond_name)
+    {
+        //Get condition names
+        std::string condname(cond_name);
+        if (getVpz()->project().experiment().conditions().exist(condname)){
+			return;
+		}
+        vpz::Condition newCond(condname);
+        vpz::Conditions& cnd_list(getVpz()->project().experiment().conditions());
+        cnd_list.add(newCond);
+        //
+        
+    }
     
+    void delCondition(char *cond_name)
+    {
+        //Get condition names
+        std::string condname(cond_name);
+        if (getVpz()->project().experiment().conditions().exist(condname)){
+			getVpz()->project().experiment().conditions().del(condname);
+		}
+        //
+        
+    }
     
     void getConditionsSize(double *size_val)
     {
@@ -514,6 +537,12 @@ public:
         strcpy(view_name,(char*)view.output().c_str());
     }
     
+    
+    // addView
+    
+    
+    // delView
+    
     // listViews
     void listViews(mxArray* ret)
     {
@@ -667,11 +696,31 @@ public:
 		}
     }
     
-    
-    // NEW METHODS **************************************
-    // TODO: addViewToObservablePort(obs_name,port_name,view_name)
-    
-    // TODO: delViewFromObservablePort(obs_name,port_name,view_name)
+
+    // addViewToObservablePort(obs_name,port_name,view_name)
+    void addViewToObservablePort(char *obsname,char *portname,char *viewname){
+		std::string obs_name(obsname);
+        std::string port_name(portname);
+        std::string view_name(viewname);
+        // test if obs and port exist
+		vpz::ObservablePort& obsport(getVpz()->project().experiment().views().observables().get(obs_name).get(port_name));
+		if ((getVpz()->project().experiment().views().exist(view_name)) && (!obsport.exist(view_name))) {
+			obsport.add(view_name);
+		}
+	
+	}
+    // delViewFromObservablePort(obs_name,port_name,view_name)
+    void delViewFromObservablePort(char *obsname,char *portname,char *viewname){
+		std::string obs_name(obsname);
+        std::string port_name(portname);
+        std::string view_name(viewname);
+        // test if obs and port exist
+		vpz::ObservablePort& obsport(getVpz()->project().experiment().views().observables().get(obs_name).get(port_name));
+		if ((getVpz()->project().experiment().views().exist(view_name)) && (obsport.exist(view_name))) {
+			obsport.del(view_name);
+		}
+	
+	}
     
     // existObservablePortView(obs_name,port_name,view_name)
     void existObservablePortView(double *exist_obs,char *obsname,char *portname,char *viewname){
@@ -754,10 +803,7 @@ public:
             jrm.start(*getVpz());
             
             const vle::oov::OutputMatrixViewList& result1(jrm.outputs());
-            
-            //mexPrintf("\n run: result size : %d",result1.size());
-            // Cast of outputs
-            // mexPrintf("%s\n run : return_type",return_type);
+            // converting results according to views list for storage plugin
             outputMatrixViewListToMxCellArray(ret,result1,return_type);
             
         } catch(const std::exception& e) {
@@ -877,9 +923,9 @@ void checkInputArgs(char *func_name,int in_args_nb,int in_needed_nb)
 	std::string msg(func_name);
 	std::ostringstream nargs;
 	nargs << in_needed_nb-2; // effective number given by user, in_needed_nb==total for mex function
-	msg.append(" : missing arguments, ");
+	msg.append(" : missing argument(s), ");
 	msg.append(nargs.str());
-	msg.append(" needed!");
+	msg.append(" needed !");
 
 	if (in_args_nb < in_needed_nb)
             //mexErrMsgTxt(msg.c_str());
@@ -1101,6 +1147,22 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         return;
     }
     
+    
+    // addCondition
+    if (!strcmp("addCondition", cmd)) {
+        // Check parameters
+        char* cond_name=mxArrayToString(prhs[2]);
+        vle_instance->addCondition(cond_name);
+        return;
+    }
+    
+    // delCondition
+    if (!strcmp("delCondition", cmd)) {
+        // Check parameters
+        char* cond_name=mxArrayToString(prhs[2]);
+        vle_instance->delCondition(cond_name);
+        return;
+    }
     
     // getConditionsSize
     if (!strcmp("getConditionsSize", cmd)) {
@@ -1476,8 +1538,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         
         char *obs_name=mxArrayToString(prhs[2]);
         char *port_name=mxArrayToString(prhs[3]);
-        //plhs[0]=mxCreateDoubleMatrix((mwSize)1, (mwSize)1, mxREAL);
-        //double *status=mxGetPr(plhs[0]);
+        
         vle_instance->addObservablePort(obs_name,port_name);
         return;
     }
@@ -1489,21 +1550,41 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         
         char *obs_name=mxArrayToString(prhs[2]);
         char *port_name=mxArrayToString(prhs[3]);
-        //plhs[0]=mxCreateDoubleMatrix((mwSize)1, (mwSize)1, mxREAL);
-        //double *status=mxGetPr(plhs[0]);
+        
         vle_instance->delObservablePort(obs_name,port_name);
         return;
     }
     
-    // NEW METHODS **************************************
     
-    // TODO: addViewToObservablePort(obs_name,port_name,view_name)
+    // addViewToObservablePort(obs_name,port_name,view_name)
+    if (!strcmp("addViewToObservablePort", cmd)) {
+		checkInputArgs(cmd,nrhs,5);
+        
+        char *obs_name=mxArrayToString(prhs[2]);
+        char *port_name=mxArrayToString(prhs[3]);
+        char *view_name=mxArrayToString(prhs[4]);
+        
+        vle_instance->addViewToObservablePort(obs_name,port_name,view_name);
+        return;
+    }
     // SEE addViewToObservablePorts : for multiple ports (cell: mxIsClass)
     
-    // TODO: delViewFromObservablePort(obs_name,port_name,view_name)
+    
+    // delViewFromObservablePort(obs_name,port_name,view_name)
+    if (!strcmp("delViewFromObservablePort", cmd)) {
+		checkInputArgs(cmd,nrhs,5);
+        
+        char *obs_name=mxArrayToString(prhs[2]);
+        char *port_name=mxArrayToString(prhs[3]);
+        char *view_name=mxArrayToString(prhs[4]);
+        
+        vle_instance->delViewFromObservablePort(obs_name,port_name,view_name);
+        return;
+    }
     // SEE delViewFromObservablePorts : for multiple ports (cell: mxIsClass)
     
-    // TODO: existObservablePortView(obs_name,port_name,view_name)
+    
+    // existObservablePortView(obs_name,port_name,view_name)
     if (!strcmp("existObservablePortView", cmd)) {
 		checkInputArgs(cmd,nrhs,5);
         
@@ -1583,9 +1664,12 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
                 vle_instance->run();
                 break;
             case 3: // with return_type
+				// getting views size
+				plhs[0]=mxCreateDoubleMatrix((mwSize)1, (mwSize)1, mxREAL);
+				double *views_size=mxGetPr(plhs[0]);
+				vle_instance->getViewsSize(views_size);
                 // Call the method
-                // No dimensions are specified , single run !!!!
-                plhs[0] =mxCreateCellMatrix(1,1);
+                plhs[0] =mxCreateCellMatrix(1,(int)*views_size);
                 char *return_type=mxArrayToString(prhs[2]);
                 // mexPrintf("%s\n run : return_type",return_type);
                 // TODO : check return_type .... "CELL_MATRIX", "DOUBLE_MATRIX" (see convert.cpp);

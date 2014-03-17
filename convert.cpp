@@ -25,7 +25,10 @@
 
 
 #include "convert.h"
-
+#include <iostream>
+#if !(defined _WIN32 || defined _WIN64) // needed to compile on linux.
+#include <string.h>
+#endif
 
 /*********************
  *  vle => mxArray
@@ -45,17 +48,27 @@ mxArray* outputMatrixToMxCellMatrix(const vle::oov::OutputMatrix& om)
 	mxArray* mxOutputMatrix = mxCreateCellMatrix(nbCols,nbLines);//WARNING note inverse lines and columns (!!)
 
 	mxArray* cellValue;
-
+	
+	
+    /*mexPrintf("Converting results to Cell array\n");
+    std::cout << "Nb Cols " << nbCols << std::endl;
+    std::cout << "Nb lines " << nbLines << std::endl;*/
+    
 	//Names in first line
 	mxSetCell(mxOutputMatrix,0,mxCreateString("time"));
 	const vle::oov::OutputMatrix::MapPairIndex& index(om.index());
 	int n = 1;
 	for ( vle::oov::OutputMatrix::MapPairIndex::const_iterator it = index.begin();
 	it != index.end(); ++it,n++ ) {
+		
 		cellValue = mxCreateString(boost::str(boost::format("%1%.%2%") %
 				it->first.first %
 				it->first.second).c_str());
 		mxSetCell(mxOutputMatrix, (n)*nbCols,cellValue);
+		
+		/*std::cout << "Port " << it->first.second << std::endl;
+		std::cout << "Column " << n  << ", name: " << mxArrayToString(cellValue) << std::endl;
+		std::cout << "Cell index " << (n)*nbCols  << ", name: " << mxArrayToString(cellValue) << std::endl;*/
 	}
 	//Cell data
 	for(int i = 0; i<nbLines ; i++){
