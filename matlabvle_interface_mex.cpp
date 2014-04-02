@@ -6,7 +6,7 @@
 #include <vle/manager/VLE.hpp>
 #include <vle/manager/Types.hpp>
 #include <vle/vpz/Vpz.hpp>
-
+#include <vle/graph/Model.hpp>
 
 #include "convert.h"
 #include "matlabvle.h"
@@ -39,6 +39,7 @@ public:
         setFileName((char*)"");
         setPackageName((char*)"");
         init();
+        setMethodsList();
     };
     
     Vle(char* pkgname, char* filename)
@@ -47,6 +48,7 @@ public:
         setPackageName(pkgname);
         init();
         openFile();
+        setMethodsList();
     };
     
     
@@ -122,22 +124,22 @@ public:
     }
     
     // getExperimentName
-    void getExperimentName(char expe_name[100]){
+	void getExperimentName(char* expe_name){
         //
         std::string expname(getVpz()->project().experiment().name());
-        strcpy(expe_name, (char*)expname.c_str());
+        strcpy(expe_name,(char*)expname.c_str());
     }
     
     // getHomeDir
-    void getHomeDir(char home_dir[100]){
+	void getHomeDir(char *home_dir){
         //
         strcpy(home_dir, this->mHomeDir);
     }
     
     // initHomeDir
     void initHomeDir(){
-        // Setting vle home dir (VLE_HOME env var)
-        strcpy(mHomeDir, getenv("VLE_HOME"));
+        // Setting vle home dir (VLE_HOME environment variable)
+        mHomeDir=getenv("VLE_HOME");
     }
     
     // openFile
@@ -189,6 +191,22 @@ public:
         getVpz()->project().experiment().setDuration(duration);
     }
     
+    
+    // getOutputPlugin
+    void getOutputPlugin(char* out_view,char* plugin_name)
+    {
+        // TO BE FIXED : frozen matlab
+        //if (getVpz()->project().experiment().views().outputs().exist(out_view)) {
+		if (false){
+			vpz::Output& out(getVpz()->project().experiment().views().outputs().get(out_view));
+			strcpy(plugin_name,(char*)out.plugin().c_str());
+		}else{
+			std::string str("");
+			strcpy(plugin_name,(char*)str.c_str());
+		}
+    }
+    
+    
     // setOutputPlugin with location arg.
     void setOutputPlugin(char* out_view,char* out_location,char* out_destination, char* out_type)
     {
@@ -198,33 +216,28 @@ public:
         assert(out_destination);
         assert(out_type);
         
+        // adding output stream if doesn't exist
+        if (!getVpz()->project().experiment().views().outputs().exist(out_view)){
+			vpz::Views& views(getVpz()->project().experiment().views());
+			if (strcmp(out_destination, "local") == 0) {
+				views.addLocalStreamOutput(out_view,out_location, out_type);
+			} else{
+				views.addDistantStreamOutput(out_view,out_location,out_type);
+			}
+		}
+        
         vpz::Output& out(getVpz()->project().experiment().views().outputs().get(out_view));
         
         //
         if (strcmp(out_destination, "local") == 0) {
             out.setLocalStream(out_location, out_type);
-            std::cout << "setting local stream " << out.streamformat() << std::endl;
+            // std::cout << "setting local stream " << out.streamformat() << std::endl;
         } else{
             out.setDistantStream(out_location, out_type);
-            std::cout << "setting distant stream " << out.streamformat() << std::endl;
+            // std::cout << "setting distant stream " << out.streamformat() << std::endl;
         }
-        
-        // 
-        // To see what is package for output
-        //
-        /*std::cout << "stream format: " << out.streamformat() << std::endl;
-        std::cout << "output package:  " << out.package() << std::endl;
-        std::cout << "output plugin:  " << out.plugin() << std::endl;
-        std::cout << "output location:  " << out.location() << std::endl;
-        std::cout << "output name:  " << out.name() << std::endl;*/
     }
     
-    // setOutputPlugin without location arg.
-    /*void setOutputPlugin(char* out_view,char* out_destination, char* out_type)
-    {
-        char* out_location=(char*)"";
-        setOutputPluginBase(out_view,out_location,out_destination, out_type);
-    }*/
     
     
     void addCondition(char *cond_name)
@@ -293,7 +306,7 @@ public:
             Vle::stringListToMxCellArray(ret,lst);
         }
         else{
-            mexPrintf("\n String list is empty");
+            // mexPrintf("\n String list is empty");
         }
     }
     
@@ -539,9 +552,36 @@ public:
     
     
     // addView
+    // All view types
+    // timed view with default time step
+    void addView(char *view_name,char *view_type,char *output)
+    {	
+		if (strcmp(view_type, (char*)"timed") == 0) {
+			// default time step !
+			double time=1;
+			getVpz()->project().experiment().views().addTimedView(view_name, time, output);
+		}else if (strcmp(view_type, (char*)"event") == 0)      {
+			getVpz()->project().experiment().views().addEventView(view_name, output);
+		}else if (strcmp(view_type, (char*)"finish") == 0)      {
+			getVpz()->project().experiment().views().addFinishView(view_name, output);
+		}else{
+			mexErrMsgTxt("unknown view type !");
+		}
+	}
     
+    // addView
+    // for specific time step
+    void addView(char *view_name,char *view_type,char *output,double *time)
+    {	
+		if (strcmp(view_type, (char*)"timed") == 0) {
+			getVpz()->project().experiment().views().addTimedView(view_name, *time, output);
+		}else{
+			mexErrMsgTxt("Only for timed view !");	
+		}
+    }
     
-    // delView
+    // TODO: delView
+    
     
     // listViews
     void listViews(mxArray* ret)
@@ -579,6 +619,8 @@ public:
             *exist_view=0;
         }
     }
+    
+    //
     
     // existObservable(obs_name)
     void existObservable(double *exist_obs,char *obs_name)
@@ -639,7 +681,7 @@ public:
     void delObservable(char* obsname)
    {
 	   std::string obsname_str(obsname);
-		//add observable to list
+		//del observable into list
 		getVpz()->project().experiment().views().observables().del(obsname_str);
    }
     
@@ -664,7 +706,7 @@ public:
             Vle::stringListToMxCellArray(ret,obsportlst);
         }
         else{
-            mexPrintf("\n String list is empty");
+            // mexPrintf("\n String list is empty");
         }
     }
     
@@ -748,7 +790,7 @@ public:
     void listDynamics(mxArray* ret)
     {
         vpz::DynamicList& lst(getVpz()->project().dynamics().dynamiclist());
-        //getting conditions names
+        //getting dynamics names
         Vle::stringListToMxCellArray(ret,lst);
     }
     
@@ -788,15 +830,148 @@ public:
             Vle::stringListToMxCellArray(ret,lst);
         }
         else{
-            mexPrintf("\n String list is empty");
+            // mexPrintf("\n String list is empty");
         }
     }
+    
+    // getAtomicModelId
+    void getAtomicModelId(char *model_name,double *model_id){
+		vpz::AtomicModelList& atommods(getVpz()->project().model().atomicModels());
+        vpz::AtomicModelList::iterator it = atommods.begin();
+        std::string msgmodname(model_name);
+		int i=0;
+        while (it != atommods.end()) {
+            if (it->first->getName() == msgmodname) {
+                break;
+            }
+            ++i;
+            ++it;
+        }
+        model_id[0]=(double)i;
+	}
+    
+    // getAtomicModel
+    vpz::AtomicModel& getAtomicModel(char *model_name){
+		vpz::AtomicModelList& atommods(getVpz()->project().model().atomicModels());
+        vpz::AtomicModelList::iterator it = atommods.begin();
+        std::string msgmodname(model_name);
+		//
+        while (it != atommods.end()) {
+            if (it->first->getName() == msgmodname) {
+                break;
+            }
+            ++it;
+        }
+        return it->second;
+	}
+	
+	// getModelObservables
+    void getModelObservables(char *modelname,char *obsname){
+		vpz::AtomicModel& a=getAtomicModel(modelname);
+		strcpy(obsname,(char*)a.observables().c_str());
+	}
+    
+    // setModelObservables
+    void setModelObservables(char *modelname,char *obsname){
+		vpz::AtomicModel& a=getAtomicModel(modelname);
+		a.setObservables(obsname);
+	}
+	
+	
+	 // getGraphModel
+    vle::graph::Model* getGraphModel(char *model_name){
+		vpz::AtomicModelList& atommods(getVpz()->project().model().atomicModels());
+        vpz::AtomicModelList::iterator it = atommods.begin();
+        std::string msgmodname(model_name);
+		
+        while (it != atommods.end()) {
+            if (it->first->getName() == msgmodname) {
+                break;
+            }
+            ++it;
+        }
+        return it->first;
+	}
+    
+    // existGraphModel
+    bool existGraphModel(char *model_name){
+		vpz::AtomicModelList& atommods(getVpz()->project().model().atomicModels());
+        vpz::AtomicModelList::iterator it = atommods.begin();
+        std::string msgmodname(model_name);
+		bool ex=false;
+        while (it != atommods.end()) {
+            if (it->first->getName() == msgmodname) {
+                ex=true;
+                break;
+            }
+            ++it;
+        }
+        return ex;
+	}
+    
+    
+    // getOutputPortNumber
+    void getOutputPortNumber(char *modelname,double *outport_num){
+		vle::graph::Model *g=getGraphModel(modelname);
+		outport_num[0]=(double)g->getOutputPortNumber();
+	}
+	
+	// existOutputPort
+	void existOutputPort(char *modelname,char *portname, double *port_exists){
+		vle::graph::Model *g=getGraphModel(modelname);
+		std::string msgportname(portname);
+		port_exists[0]=(double)g->existOutputPort(msgportname);
+		
+	}
+	
+	
+	// listOutputPorts
+	void listOutputPorts(mxArray* ret,char *modelname)
+    {
+		vle::graph::Model *g=getGraphModel(modelname);
+		
+		std::string mod=g->getName();
+			
+		vle::graph::ConnectionList& connlist=g->getOutputPortList();
+	        
+        vle::graph::ConnectionList::iterator it = connlist.begin();
+        
+        int i=0;
+        std::list < std::string > lst;
+        while (it != connlist.end()) {
+            lst.push_back(it->first.c_str());
+            ++i;
+            ++it;
+        }
+        if (i>0){
+            Vle::stringListToMxCellArray(ret,lst);
+        }else{
+            // mexPrintf("\n String list is empty");
+        }
+        
+        
+    }
+	
+	// addOutputPort
+	void addOutputPort(char *modelname,char *portname){
+		vle::graph::Model *g=getGraphModel(modelname);
+		std::string msgportname(portname);
+		vle::graph::ModelPortList& portlist=g->addOutputPort(msgportname);
+		
+	}
+    
+    // delOutputPort
+    void delOutputPort(char *modelname,char *portname){
+		vle::graph::Model *g=getGraphModel(modelname);
+		std::string msgportname(portname);
+		g->delOutputPort(msgportname);
+	}
+    
     
     // run for storage plugin
     void run(mxArray* ret ,const char *return_type)
     {
         assert(return_type);
-        
         try {
             // Simulate 1 simulation
             vle::manager::RunQuiet jrm;
@@ -815,15 +990,9 @@ public:
     // run for file plugin
     void run()
     {
-        //std::cout << "dans run()" << std::endl;
-        
-        //Declaration of outputs
-        
         try {
-            // Simulate 1 simulation
-            
+            // 1 simulation
             vle::manager::RunQuiet jrm;
-            
             jrm.start(*getVpz());
         } catch(const std::exception& e) {
             mexPrintf("\n matlabvle : ERROR while running simulation, message : \n %s \n",e.what());
@@ -852,7 +1021,7 @@ public:
             }
         }
         else{
-            mexPrintf("\n std::string -> String list is empty");
+            // mexPrintf("\n std::string -> String list is empty");
         }
     }
     
@@ -867,7 +1036,7 @@ public:
             }
         }
         else{
-            mexPrintf("\n  vpz::DynamicList -> String list is empty");
+            // mexPrintf("\n  vpz::DynamicList -> String list is empty");
         }
     }
     
@@ -882,7 +1051,7 @@ public:
             }
         }
         else{
-            mexPrintf("\n vpz::ObservableList -> String list is empty");
+            // mexPrintf("\n vpz::ObservableList -> String list is empty");
         }
     }
     
@@ -897,20 +1066,62 @@ public:
             }
         }
         else{
-            mexPrintf("\n vpz::ObservablePortList -> String list is empty");
+            // mexPrintf("\n vpz::ObservablePortList -> String list is empty");
         }
     }
     
-    
-    
+	/*void getMethodsList(mxArray* ret){
+	}*/
+	
+	void setMethodsList(){
+			// For filling methods list usable through mex function ...  
+		
+			std::string mlist[]={"getFileName" , "setFileName" , "getPackageName" , "setPackageName", \
+            "openFile" , "save" , "getStatus" , "getHomeDir" , \
+            "getExperimentName" , "getBegin" , "setBegin" , "getDuration" , "setDuration" , \
+            "setOutputPlugin" , "getOutputPlugin" , \
+            "addCondition" , "delCondition" , "getConditionsSize" , "listConditions" , "getConditionPortsSize", \
+            "listConditionPorts" , "clearConditionPort" , "getConditionPortValuesSize", \
+            "getConditionPortValues" , "getConditionPortValue" , "getConditionValueType" , \
+            "addRealCondition" , "addIntegerCondition" , "addStringCondition" , "addBooleanCondition", \
+            "getViewOutput" , "getViewsSize" , "listViews" , "existView" , "addView" , \
+            "getDynamicsSize" , "listDynamics" , "getDynamicModelsSize" , "listDynamicModels" , "setConditionValue" , \
+            "existObservable" , "listObservables" , "getObservablesSize" , "clearObservables" , \
+            "addObservable" , "delObservable" , \
+            "listObservablePorts" , "getObservablePortsSize" , "addObservablePort" , "delObservablePort" , \
+            "existObservablePortView" , "addViewToObservablePort" , "delViewFromObservablePort" , \
+            "getAtomicModelId" , "getModelObservables" , "setModelObservables", \ 
+            "getOutputPortNumber" , "existOutputPort" , "addOutputPort" , "delOutputPort" , "listOutputPorts", \
+            "run" , \
+            "existMethod"};
+            
+            int sz=sizeof(mlist)/sizeof(mlist[0]);
+          
+        for (int i=0; i<=sz; i++){ 
+			this->mMethodsList.push_back(((char*)mlist[i].c_str()));
+        }
+	}
+	
+	
+	void existMethod(double *method_exists,char *method_name){
+		// Telling if a method is available for the matlab Vle interface class
+		std::string method(method_name);
+		*method_exists=1;
+		std::list<std::string>::iterator findIter = std::find(this->mMethodsList.begin(), this->mMethodsList.end(), method_name);
+		if (findIter == this->mMethodsList.end()){
+			*method_exists=0;
+		}	
+	}
+	
+	
 private:
     matlabvle_t mVpz;
     char mFileName[100];
     char mPackageName[100];
     bool mInitStatus;
-    char mHomeDir[100];
+    char *mHomeDir;
+    std::list<std::string> mMethodsList;
 };
-
 
 
 
@@ -919,35 +1130,33 @@ void checkInputArgs(char *func_name,int in_args_nb,int in_needed_nb)
 {
 	// checking input argument number passed through the mex function/function name
 	// Throwing an exception if not enough numerous.
-	// No error message Id is given in exception message
+	// No error message Id is given in exception message.
 	std::string msg(func_name);
 	std::ostringstream nargs;
-	nargs << in_needed_nb-2; // effective number given by user, in_needed_nb==total for mex function
+	nargs << in_needed_nb-2; // effective number given by user, in_needed_nb==total for mex function (in and out)
 	msg.append(" : missing argument(s), ");
 	msg.append(nargs.str());
 	msg.append(" needed !");
 
 	if (in_args_nb < in_needed_nb)
-            //mexErrMsgTxt(msg.c_str());
             mexErrMsgIdAndTxt("MATLABVLE:narginchk:notEnoughInputs",msg.c_str());
 }
 
 
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
-    // Get the command string
+    // Getting the command string
     char cmd[64];
     if (nrhs < 1 || mxGetString(prhs[0], cmd, sizeof(cmd)))
         mexErrMsgTxt("First input should be a command string less than 64 characters long.");
     
     
-    // New
+    // new, for instanciation
     if (!strcmp("new", cmd)) {
         // Check parameters
         if(nlhs != 1)
             mexErrMsgTxt("New: One output expected.");
-        // Return a handle to a new C++ instance
-        //
+        // Returns a handle to a new C++ instance
         switch (nrhs){
             case 1:
                 plhs[0] = convertPtr2Mat<Vle>(new Vle);
@@ -963,11 +1172,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         return;
     }
     
-    // Check there is a second input, which should be the class instance handle
+    // Check if there is a second input, this should be the class instance handle
     if (nrhs < 2)
         mexErrMsgTxt("Second input should be a class instance handle.");
     
-    // Delete object
+    // delete object
     if (!strcmp("delete", cmd)) {
         // Destroy the C++ object
         destroyObject<Vle>(prhs[1]);
@@ -982,17 +1191,15 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     
     
     ///////////////////////////////////////////////////////////
-    // Call the various class methods
+    // Calling the class methods
     ///////////////////////////////////////////////////////////
     
     
-    // setFileName
+    // setFileName(in_name)
     if (!strcmp("setFileName", cmd)) {
+		// Checking input parameters
 		checkInputArgs(cmd,nrhs,3);
-        // Check parameters
-        /*if (nrhs < 3)
-            mexErrMsgTxt("setFilename: missing arguments.");*/
-        // Call the method
+        
         char *in_name=mxArrayToString(prhs[2]);
         
         vle_instance->setFileName(in_name);
@@ -1000,10 +1207,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
     
     
-    // getFileName   :
+    // getFileName()
     if (!strcmp("getFileName", cmd)) {
-        // Check parameters
-        // Call the method
         char out_name[100];
         vle_instance->getFileName(out_name);
         plhs[0] = mxCreateString(out_name);
@@ -1011,24 +1216,19 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
     
     
-    // setPackageName
+    // setPackageName(in_name)
     if (!strcmp("setPackageName", cmd)) {
+		// Checking input parameters
 		checkInputArgs(cmd,nrhs,3);
-        // Check parameters
-        /*if (nrhs < 3)
-            mexErrMsgTxt("Test: missing arguments.");*/
-        // Call the method
-        
+    
         char* in_name=mxArrayToString(prhs[2]);
         vle_instance->setPackageName(in_name);
         return;
     }
     
     
-    // getPackageName   :
+    // getPackageName()
     if (!strcmp("getPackageName", cmd)) {
-        // Check parameters
-        // Call the method
         char out_name[100];
         vle_instance->getPackageName(out_name);
         plhs[0] = mxCreateString(out_name);
@@ -1036,30 +1236,30 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
     
     
-    // openFile
+    // openFile()
     if (!strcmp("openFile", cmd)) {
-        // Call the method
         vle_instance->openFile();
         return;
     }
     
     
-    // save
+    // save(file_name)
     if (!strcmp("save", cmd)) {
+		// Checking input parameters
 		checkInputArgs(cmd,nrhs,3);
 		
 		char* file_name=mxArrayToString(prhs[2]);
-        // Call the method
+
         vle_instance->save(file_name);
         return;
     }
     
     
-    // getInitStatus   :
+    // getInitStatus()
     if (!strcmp("getInitStatus", cmd)) {
+		// Checking input parameters
 		checkInputArgs(cmd,nrhs,2);
         
-        // Call the method
         bool *out_status;
         vle_instance->getInitStatus(out_status);
         plhs[0]=mxCreateLogicalScalar(*out_status);
@@ -1067,36 +1267,27 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
     
     
-    // getHomeDir   :
+    // getHomeDir()
     if (!strcmp("getHomeDir", cmd)) {
-        // Check parameters
-        
-        // Call the method
+ 
         char home_dir[100];
         vle_instance->getHomeDir(home_dir);
-        
         plhs[0] = mxCreateString(home_dir);
         return;
     }
     
     
-    // getExperimentName
+    // getExperimentName()
     if (!strcmp("getExperimentName", cmd)) {
-        // Check parameters
-        
-        // Call the method
         char expe_name[100];
         vle_instance->getExperimentName(expe_name);
-        
         plhs[0] = mxCreateString(expe_name);
         return;
     }
     
     
-    // getBegin
-    if (!strcmp("getBegin", cmd)) {
-        // Check parameters
-        
+    // getBegin()
+    if (!strcmp("getBegin", cmd)) {   
         plhs[0]=mxCreateDoubleMatrix((mwSize)1, (mwSize)1, mxREAL);
         double *out_begin=mxGetPr(plhs[0]);
         vle_instance->getBegin(out_begin);
@@ -1104,19 +1295,18 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
     
     
-    // setBegin
+    // setBegin(in_begin)
     if (!strcmp("setBegin", cmd)) {
+		// Checking input parameters
 		checkInputArgs(cmd,nrhs,3);
-        
         double in_begin=mxGetScalar(prhs[2]);
         vle_instance->setBegin(in_begin);
         return;
     }
     
     
-    // getDuration
+    // getDuration()
     if (!strcmp("getDuration", cmd)) {
-        // Check parameters
         plhs[0]=mxCreateDoubleMatrix((mwSize)1, (mwSize)1, mxREAL);
         double *out_duration=mxGetPr(plhs[0]);
         vle_instance->getDuration(out_duration);
@@ -1124,21 +1314,32 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
     
     
-    // setDuration
+    // setDuration(in_duration)
     if (!strcmp("setDuration", cmd)) {
+		// Checking input parameters
 		checkInputArgs(cmd,nrhs,3);
-        
-        
         double in_duration=mxGetScalar(prhs[2]);
         vle_instance->setDuration(in_duration);
         return;
     }
     
     
-    // setOutputPlugin   :
+    // getOutputPlugin(view_name)
+    if (!strcmp("getOutputPlugin", cmd)) {
+		// Checking input parameters
+		checkInputArgs(cmd,nrhs,3);
+        char* plugin_name=mxArrayToString(mxCreateString(""));
+        //char plugin_name[100];
+        char* out_view=mxArrayToString(prhs[2]);
+        vle_instance->getOutputPlugin(out_view,plugin_name);
+        plhs[0] = mxCreateString(plugin_name);
+        return;
+    }
+    
+    // setOutputPlugin(out_view,out_location,out_destination,out_type)
     if (!strcmp("setOutputPlugin", cmd)) {
+		// Checking input parameters
 		checkInputArgs(cmd,nrhs,6);
-        
         char* out_view=mxArrayToString(prhs[2]);
         char* out_location=mxArrayToString(prhs[3]);
         char* out_destination=mxArrayToString(prhs[4]);
@@ -1148,26 +1349,26 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
     
     
-    // addCondition
+    // addCondition(cond_name)
     if (!strcmp("addCondition", cmd)) {
-        // Check parameters
+		// Checking input parameters
+		checkInputArgs(cmd,nrhs,3);
         char* cond_name=mxArrayToString(prhs[2]);
         vle_instance->addCondition(cond_name);
         return;
     }
     
-    // delCondition
+    // delCondition(cond_name)
     if (!strcmp("delCondition", cmd)) {
-        // Check parameters
+		// Checking input parameters
+		checkInputArgs(cmd,nrhs,3);
         char* cond_name=mxArrayToString(prhs[2]);
         vle_instance->delCondition(cond_name);
         return;
     }
     
-    // getConditionsSize
+    // getConditionsSize()
     if (!strcmp("getConditionsSize", cmd)) {
-        // Check parameters
-        
         plhs[0]=mxCreateDoubleMatrix((mwSize)1, (mwSize)1, mxREAL);
         double *out_size=mxGetPr(plhs[0]);
         vle_instance->getConditionsSize(out_size);
@@ -1175,12 +1376,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
     
     
-    // listConditions
+    // listConditions()
     if (!strcmp("listConditions", cmd)) {
         // get conditions list size
         double *max_cond=mxGetPr(mxCreateDoubleMatrix((mwSize)1, (mwSize)1, mxREAL));
         vle_instance->getConditionsSize(max_cond);
-        
         plhs[0] = mxCreateCellMatrix(1,(int)*max_cond);
         vle_instance->listConditions(plhs[0]);
         
@@ -1188,10 +1388,10 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
     
     
-    // getConditionPortsSize
+    // getConditionPortsSize(cond_name)
     if (!strcmp("getConditionPortsSize", cmd)) {
+		// Checking input parameters
         checkInputArgs(cmd,nrhs,3);
-        
         char *cond_name=mxArrayToString(prhs[2]);
         plhs[0]=mxCreateDoubleMatrix((mwSize)1, (mwSize)1, mxREAL);
         double *out_size=mxGetPr(plhs[0]);
@@ -1202,12 +1402,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     
     // listConditionPorts(cond_name)
     if (!strcmp("listConditionPorts", cmd)) {
+		// Checking input parameters
 		checkInputArgs(cmd,nrhs,3);
-        
         char *cond_name=mxArrayToString(prhs[2]);
         double *out_size=mxGetPr(mxCreateDoubleMatrix((mwSize)1, (mwSize)1, mxREAL));
         vle_instance->getConditionsPortsSize(out_size,cond_name);
-        
         plhs[0] = mxCreateCellMatrix(1,(int)*out_size);
         vle_instance->listConditionPorts(plhs[0],cond_name);
         return;
@@ -1216,6 +1415,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     
     // clearConditionPort(condition_name,port_name)
     if (!strcmp("clearConditionPort", cmd)) {
+		// Checking input parameters
         checkInputArgs(cmd,nrhs,4);
         
         char *cond_name=mxArrayToString(prhs[2]);
@@ -1228,8 +1428,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
     
     
-    // getConditionPortValuesSize(cond_name,p_name)
+    // getConditionPortValuesSize(cond_name,port_name)
     if (!strcmp("getConditionPortValuesSize", cmd)) {
+		// Checking input parameters
 		checkInputArgs(cmd,nrhs,4);
         
         char *cond_name=mxArrayToString(prhs[2]);
@@ -1243,8 +1444,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
     
     
-    // getConditionPortValues(cond_name,p_name)
+    // getConditionPortValues(cond_name,port_name)
     if (!strcmp("getConditionPortValues", cmd)) {
+		// Checking input parameters
         checkInputArgs(cmd,nrhs,4);
         
         char *cond_name=mxArrayToString(prhs[2]);
@@ -1253,8 +1455,6 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         
         vle_instance->getConditionPortValuesSize(out_size,cond_name,port_name);
         
-        //std::cout << "getConditionPortValues::size " << *out_size << std::endl;    
-        
         plhs[0]=mxCreateCellMatrix((mwSize)1,(mwSize)(int)*out_size);
         
         vle_instance->getConditionPortValues(plhs[0],cond_name,port_name);
@@ -1262,8 +1462,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
     
     
-    // getConditionPortValue(cond_name,p_name,idx)
+    // getConditionPortValue(cond_name,port_name,value_pos)
     if (!strcmp("getConditionPortValue", cmd)) {
+		// Checking input parameters
 		checkInputArgs(cmd,nrhs,5);
         
         char value_type[30];
@@ -1281,14 +1482,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 		
         vle_instance->getConditionValueType(value_type,cond_name,port_name,(int)value_pos);
         
-        //std::cout << "value type : " << value_type << std::endl;
-        //std::cout << "value pos : " << value_pos << std::endl;
-        
         port_values=mxCreateCellMatrix((mwSize)1,(mwSize)(int)*out_size);;
         vle_instance->getConditionPortValues(port_values,cond_name,port_name);
         
         mxArray *out;
-        //out=mxCreateDoubleScalar(mxGetNaN());
+        
         try{
 			if (value_pos<*out_size){
 				mxArray *port_value = mxGetCell(port_values,value_pos);
@@ -1312,8 +1510,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
     
     
-    // getConditionValueType(cond_name,port_name,position_value)
+    // getConditionValueType(cond_name,port_name,value_pos)
     if (!strcmp("getConditionValueType", cmd)) {
+		// Checking input parameters
 		checkInputArgs(cmd,nrhs,5);
         
         char value_type[30];
@@ -1326,8 +1525,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
     
     
-    // addRealCondition(condition_name,port_name,value_content)
+    // addRealCondition(condition_name,port_name,value)
     if (!strcmp("addRealCondition", cmd)) {
+		// Checking input parameters
 		checkInputArgs(cmd,nrhs,5);
         
         char *cond_name=mxArrayToString(prhs[2]);
@@ -1340,8 +1540,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
     
     
-    // addIntegerCondition(condition_name,port_name,value_content)
+    // addIntegerCondition(condition_name,port_name,value)
     if (!strcmp("addIntegerCondition", cmd)) {
+		// Checking input parameters
         checkInputArgs(cmd,nrhs,5);
         
         char *cond_name=mxArrayToString(prhs[2]);
@@ -1354,8 +1555,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
     
     
-    // addBooleanCondition(condition_name,port_name,value_content)
+    // addBooleanCondition(condition_name,port_name,value)
     if (!strcmp("addBooleanCondition", cmd)) {
+		// Checking input parameters
 		checkInputArgs(cmd,nrhs,5);
         
         char *cond_name=mxArrayToString(prhs[2]);
@@ -1368,8 +1570,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
     
     
-    // addStringCondition(condition_name,port_name,value_content)
+    // addStringCondition(condition_name,port_name,value)
     if (!strcmp("addStringCondition", cmd)) {
+		// Checking input parameters
         checkInputArgs(cmd,nrhs,5);
         
         char *cond_name=mxArrayToString(prhs[2]);
@@ -1384,6 +1587,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     
     // setConditionValue(condition_name,port_name,value,value_type,value_position)
     if (!strcmp("setConditionValue", cmd)) {
+		// Checking input parameters
         checkInputArgs(cmd,nrhs,7);
         
         char *cond_name=mxArrayToString(prhs[2]);
@@ -1398,21 +1602,32 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
     
     
-    // getViewOutput
+    // getViewOutput()
     if (!strcmp("getViewOutput", cmd)) {
+		// Checking input parameters
 		checkInputArgs(cmd,nrhs,3);
-        // see for output checking !
-        /*if (nlhs < 0 || nrhs < 3)
-            mexErrMsgTxt("Test: missing arguments.");*/
-        //
+        
         char *view_name=mxArrayToString(prhs[2]);
         vle_instance->getViewOutput(view_name);
         plhs[0] = mxCreateString(view_name);
         return;
     }
     
+    // addView(view_name,view_type,output)
+    if (!strcmp("addView", cmd)) {
+		// Checking input parameters
+		checkInputArgs(cmd,nrhs,5);
+		char *view_name=mxArrayToString(prhs[2]);
+		char *view_type=mxArrayToString(prhs[3]);
+		char *output=mxArrayToString(prhs[4]);
+		vle_instance->addView(view_name,view_type,output);
+		return;
+	}
     
-    // listViews
+    // TODO : delView()
+    
+    
+    // listViews()
     if (!strcmp("listViews", cmd)) {
         double *views_size=mxGetPr(mxCreateDoubleMatrix((mwSize)1, (mwSize)1, mxREAL));
         vle_instance->getViewsSize(views_size);
@@ -1422,8 +1637,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
     
     
-    // getViewsSize
+    // getViewsSize()
     if (!strcmp("getViewsSize", cmd)) {
+		
         plhs[0]=mxCreateDoubleMatrix((mwSize)1, (mwSize)1, mxREAL);
         double *views_size=mxGetPr(plhs[0]);
         vle_instance->getViewsSize(views_size);
@@ -1431,8 +1647,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
     
     
-    // existView(view_exist,view_name)
+    // existView(view_name)
     if (!strcmp("existView", cmd)) {
+		// Checking input parameters
 		checkInputArgs(cmd,nrhs,3);
         
         char *view_name=mxArrayToString(prhs[2]);
@@ -1444,8 +1661,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
     
     
-    // existObservable(obs_exist,obs_name)
+    // existObservable(obs_name)
     if (!strcmp("existObservable", cmd)) {
+		// Checking input parameters
 		checkInputArgs(cmd,nrhs,3);
         
         char *obs_name=mxArrayToString(prhs[2]);
@@ -1457,7 +1675,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
     
     
-    // listObservables
+    // listObservables()
     if (!strcmp("listObservables", cmd)) {
         
         double *out_size=mxGetPr(mxCreateDoubleMatrix((mwSize)1, (mwSize)1, mxREAL));
@@ -1487,6 +1705,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     
     // addObservable(obs_name)
     if (!strcmp("addObservable", cmd)) {
+		// Checking input parameters
         checkInputArgs(cmd,nrhs,3);
         
         char *obs_name=mxArrayToString(prhs[2]);
@@ -1499,6 +1718,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     
     // delObservable(obs_name)
     if (!strcmp("delObservable", cmd)) {
+		// Checking input parameters
         checkInputArgs(cmd,nrhs,3);
         
         char *obs_name=mxArrayToString(prhs[2]);
@@ -1509,6 +1729,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     
     // getObservablePortsSize(obs_name)
     if (!strcmp("getObservablePortsSize", cmd)) {
+		// Checking input parameters
         checkInputArgs(cmd,nrhs,3);
         
         char *obs_name=mxArrayToString(prhs[2]);
@@ -1521,6 +1742,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     
     // listObservablePorts(obs_name)
     if (!strcmp("listObservablePorts", cmd)) {
+		// Checking input parameters
         checkInputArgs(cmd,nrhs,3);
         
         char *obs_name=mxArrayToString(prhs[2]);
@@ -1534,6 +1756,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     
     // addObservablePort(obs_name,port_name)
 	if (!strcmp("addObservablePort", cmd)) {
+		// Checking input parameters
         checkInputArgs(cmd,nrhs,4);
         
         char *obs_name=mxArrayToString(prhs[2]);
@@ -1546,7 +1769,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     
     // delObservablePort(obs_name,port_name)
     if (!strcmp("delObservablePort", cmd)) {
-        checkInputArgs(cmd,nrhs,3);
+		// Checking input parameters
+        checkInputArgs(cmd,nrhs,4);
         
         char *obs_name=mxArrayToString(prhs[2]);
         char *port_name=mxArrayToString(prhs[3]);
@@ -1558,6 +1782,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     
     // addViewToObservablePort(obs_name,port_name,view_name)
     if (!strcmp("addViewToObservablePort", cmd)) {
+		// Checking input parameters
 		checkInputArgs(cmd,nrhs,5);
         
         char *obs_name=mxArrayToString(prhs[2]);
@@ -1572,6 +1797,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     
     // delViewFromObservablePort(obs_name,port_name,view_name)
     if (!strcmp("delViewFromObservablePort", cmd)) {
+		// Checking input parameters
 		checkInputArgs(cmd,nrhs,5);
         
         char *obs_name=mxArrayToString(prhs[2]);
@@ -1586,6 +1812,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     
     // existObservablePortView(obs_name,port_name,view_name)
     if (!strcmp("existObservablePortView", cmd)) {
+		// Checking input parameters
 		checkInputArgs(cmd,nrhs,5);
         
         char *obs_name=mxArrayToString(prhs[2]);
@@ -1599,9 +1826,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
     
     
-    // getDynamicsSize
+    // getDynamicsSize()
     if (!strcmp("getDynamicsSize", cmd)) {
-        // Check parameters
+
         plhs[0]=mxCreateDoubleMatrix((mwSize)1, (mwSize)1, mxREAL);
         double *out_size=mxGetPr(plhs[0]);
         vle_instance->getDynamicsSize(out_size);
@@ -1609,7 +1836,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
     
     
-    // listDynamics
+    // listDynamics()
     if (!strcmp("listDynamics", cmd)) {
         // get conditions list size
         
@@ -1617,14 +1844,14 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         vle_instance->getDynamicsSize(max_cond);
         
         plhs[0] = mxCreateCellMatrix(1,(int)*max_cond);
-        vle_instance->listDynamics(plhs[0] );
-        //plhs[0] = ret;
+        vle_instance->listDynamics(plhs[0]);
         return;
     }
     
     
-    // getDynamicModelsSize
+    // getDynamicModelsSize(dyn_name)
     if (!strcmp("getDynamicModelsSize", cmd)) {
+        // Checking input parameters
         checkInputArgs(cmd,nrhs,3);
         
         char *dyn_name=mxArrayToString(prhs[2]);
@@ -1634,8 +1861,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         return;
     }
     
-    // listDynamicModels(dynamic_name)
+    // listDynamicModels(dyn_name)
     if (!strcmp("listDynamicModels", cmd)) {
+        // Checking input parameters
         checkInputArgs(cmd,nrhs,3);
         
         char *dyn_name=mxArrayToString(prhs[2]);
@@ -1649,13 +1877,122 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
     
     
+    // getAtomicModelId(model_name)
+    if (!strcmp("getAtomicModelId", cmd)) {
+        // Checking input parameters
+        checkInputArgs(cmd,nrhs,3);
+        char* model_name=mxArrayToString(prhs[2]);
+        plhs[0]=mxCreateDoubleMatrix((mwSize)1, (mwSize)1, mxREAL);
+        double *model_id=mxGetPr(plhs[0]);
+        vle_instance->getAtomicModelId(model_name,model_id);
+        return;
+	}
     
+    // getModelObservables(model_name)
+    if (!strcmp("getModelObservables", cmd)) {
+        // Checking input parameters
+		checkInputArgs(cmd,nrhs,3);
+		char* model_name=mxArrayToString(prhs[2]);
+		char* obs_name=mxArrayToString(mxCreateString(""));
+		vle_instance->getModelObservables(model_name,obs_name);
+		plhs[0] = mxCreateString(obs_name);
+		return;
+	}
     
+    // setModelObservables(model_name,obs_name)
+    if (!strcmp("setModelObservables", cmd)) {
+        // Checking input parameters
+		checkInputArgs(cmd,nrhs,4);
+		char* model_name=mxArrayToString(prhs[2]);
+		char* obs_name=mxArrayToString(prhs[3]);
+		vle_instance->setModelObservables(model_name,obs_name);
+		return;
+	}
+	
+	
+	// getOutputPortNumber(model_name)
+	 if (!strcmp("getOutputPortNumber", cmd)) {
+	    // Checking input parameters
+		checkInputArgs(cmd,nrhs,3);
+		char* model_name=mxArrayToString(prhs[2]);
+		plhs[0]=mxCreateDoubleMatrix((mwSize)1, (mwSize)1, mxREAL);
+		double *port_number=mxGetPr(plhs[0]);
+			
+		if (vle_instance->existGraphModel(model_name)){	
+			vle_instance->getOutputPortNumber(model_name,port_number);
+		}else{
+			*port_number=mxGetNaN();
+		}
+		return;
+	}
+	
+	// existOutputPort(model_name,port_name)
+	if (!strcmp("existOutputPort", cmd)) {
+        // Checking input parameters
+		checkInputArgs(cmd,nrhs,4);
+		char* model_name=mxArrayToString(prhs[2]);
+		char* port_name=mxArrayToString(prhs[3]);
+		plhs[0]=mxCreateDoubleMatrix((mwSize)1, (mwSize)1, mxREAL);
+		
+		double *port_exists=mxGetPr(plhs[0]);
+		if (vle_instance->existGraphModel(model_name)){	
+			vle_instance->existOutputPort(model_name,port_name,port_exists);
+		}else{
+			*port_exists=mxGetNaN();
+		}
+		return;
+	}
+	
+	// listOutputPorts
+	if (!strcmp("listOutputPorts", cmd)) {
+		checkInputArgs(cmd,nrhs,3);
+        char* model_name=mxArrayToString(prhs[2]);
+        
+        double *port_number=mxGetPr(mxCreateDoubleMatrix((mwSize)1, (mwSize)1, mxREAL));
+        
+        if (vle_instance->existGraphModel(model_name)){	
+			vle_instance->getOutputPortNumber(model_name,port_number);	
+			plhs[0] = mxCreateCellMatrix(1,(int)*port_number);
+			vle_instance->listOutputPorts(plhs[0],model_name);
+		}else{
+			plhs[0] = mxCreateCellMatrix(1,1);
+		}
+		
+		return;
+	
+	}
+	
+	// addOutputPort(model_name,port_name)
+	if (!strcmp("addOutputPort", cmd)) {
+        // Checking input parameters
+		checkInputArgs(cmd,nrhs,4);
+		char* model_name=mxArrayToString(prhs[2]);
+		char* port_name=mxArrayToString(prhs[3]);
+		
+		if (vle_instance->existGraphModel(model_name)){		
+			vle_instance->addOutputPort(model_name,port_name);
+		}
+		return;
+	}
+	
     
+    // delOutputPort(model_name,port_name)
+    if (!strcmp("delOutputPort", cmd)) {
+        // Checking input parameters
+		checkInputArgs(cmd,nrhs,4);
+		char* model_name=mxArrayToString(prhs[2]);
+		char* port_name=mxArrayToString(prhs[3]);
+		
+		if (vle_instance->existGraphModel(model_name)){	
+			vle_instance->delOutputPort(model_name,port_name);
+		}	
+		return;
+	}
+	
     
     // run   :  simple run
     if (!strcmp("run", cmd)) {
-        // Check parameters
+        // Checking input parameters
         checkInputArgs(cmd,nrhs,2);
         
         switch (nrhs){
@@ -1683,6 +2020,20 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         return;
     }
     
+    
+    
+    // existMethod(method_name)
+    if (!strcmp("existMethod", cmd)) {
+		// Checking input parameters
+		checkInputArgs(cmd,nrhs,3);
+        
+        char *method_name=mxArrayToString(prhs[2]);
+        
+        plhs[0]=mxCreateDoubleMatrix((mwSize)1, (mwSize)1, mxREAL);
+        double *status=mxGetPr(plhs[0]);
+        vle_instance->existMethod(status,method_name);
+        return;
+    }
     
     // Got here, so command not recognized
     mexErrMsgTxt("Unknown command !");
